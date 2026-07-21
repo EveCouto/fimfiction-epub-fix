@@ -80,10 +80,6 @@ def get_img_data(img: str) -> dict:
             "name": img_name, "src": new_src}
 
 
-def replace_patterns(content, old, new) -> str:
-    pass
-
-
 def update_xml(xml: str, links: set):
     """Updates XML, only really works with byte
 
@@ -208,6 +204,7 @@ def start_parser():
     return args
 
 
+# TODO add recursive folder search.
 def main():
     # Gets args and sets them to local variables
     args = start_parser()
