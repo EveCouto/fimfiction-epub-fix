@@ -126,9 +126,6 @@ def update_zip(in_zip_path: str, out_zip_path: str,
         verbose (bool): determines console prints
     """
 
-    print("---------------------")
-    print(f"Fixing '{os.path.basename(in_zip_path)}'")
-
     # Updates data in dictionary
     for key in file_to_img.keys():
         file_to_img[key] = list(map(get_img_data, file_to_img[key]))
@@ -169,10 +166,6 @@ def update_zip(in_zip_path: str, out_zip_path: str,
                     print(f"HTTP Error, skipping image {link}")
                 out_zip.writestr(f"{"images/"+name}", file)
 
-    print(f"\033[92mFixing '{os.path.basename(in_zip_path)}' Complete!\033[0m")
-    print(f"Located at {out_zip_path}")
-    print("---------------------")
-
 
 def file_path(string: str):
     """Checks if string is a file path
@@ -203,14 +196,14 @@ def start_parser():
     parser.add_argument("-i", "--input",
                         help="input path",
                         required=True,
-                        type=file_path)
-    parser.add_argument("-o", "--output",
-                        help="Output  path",
-                        type=file_path)
+                        type=file_path,
+                        nargs="+")
     parser.add_argument("-v", "--verbose",
                         help="more info",
-                        type=bool,
-                        default=True)
+                        action="store_false")
+    parser.add_argument("-ov", "--overwrite",
+                        help="Ignores output and overwrites",
+                        action="store_true")
     args = parser.parse_args()
     return args
 
@@ -218,17 +211,30 @@ def start_parser():
 def main():
     # Gets args and sets them to local variables
     args = start_parser()
-    in_file = args.input
-    if not args.output:
-        print("rans")
-        out_file = os.path.splitext(args.input)[0] + "-fixed.epub"
-        print(out_file)
-    else:
-        out_file = args.output
+    files = args.input
+
     verbose = args.verbose
 
+    print("---------------------")
     # Runs the main code
-    update_zip(in_file, out_file, scan_zip(in_file, ".html"), verbose)
+    for file in files:
+
+        # Print starting
+        print(f"Fixing '{os.path.basename(file)}'")
+
+        out_file = os.path.splitext(file)[0] + "-fixed.epub"
+        update_zip(file, out_file, scan_zip(file, ".html"), verbose)
+
+        if args.overwrite:
+            os.replace(out_file, file)
+
+        # Prints Complete
+        print(f"\033[92mFixing '{os.path.basename(file)}' Complete!\033[0m")
+        if args.overwrite:
+            print(f"Located at {file}")
+        else:
+            print(f"Located at {out_file}")
+        print("---------------------")
 
 
 if __name__ == "__main__":
