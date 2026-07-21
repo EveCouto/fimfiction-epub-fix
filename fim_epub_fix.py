@@ -181,6 +181,43 @@ def file_path(string: str):
         raise NotADirectoryError(string)
 
 
+def dir_path(string: str):
+    """Checks if string is a dir path
+
+    Args:
+        string (str): input string
+
+    Raises:
+        NotADirectoryError: error
+
+    Returns:
+        str: returns the absolute path
+    """
+    if os.path.isdir(string):
+        return os.path.abspath(string)
+    else:
+        raise NotADirectoryError(string)
+
+
+def is_epub(path: str) -> bool:
+    if not os.path.isfile():
+        return False
+    if os.path.splitext()[1] != ".epub":
+        return False
+    return True
+
+
+def get_files(dir_path: str, files: list[str] = []) -> list[str]:
+    abs_path = os.path.abspath(dir_path)
+    for item in os.listdir(abs_path):
+        item_path = os.path.join(abs_path, item)
+        if os.path.isdir(item_path):
+            files.append(get_files(item_path, files))
+        elif os.path.isfile(item_path):
+            files.append(item_path)
+    return files
+
+
 def start_parser():
     """Creates a argument processor
 
@@ -190,15 +227,18 @@ def start_parser():
     parser = argparse.ArgumentParser(description=(
         "Adds images to epubs using urls"))
     parser.add_argument("-i", "--input",
-                        help="input path",
+                        help="input path or file",
                         required=True,
-                        type=file_path,
+                        type=(dir_path or file_path),
                         nargs="+")
-    parser.add_argument("-v", "--verbose",
-                        help="more info",
+    parser.add_argument("-lv", "--less_verbose",
+                        help="less info",
                         action="store_false")
     parser.add_argument("-ov", "--overwrite",
                         help="Ignores output and overwrites",
+                        action="store_true")
+    parser.add_argument("-r", "--recurse",
+                        help="Goes through all subfolders",
                         action="store_true")
     args = parser.parse_args()
     return args
@@ -208,27 +248,49 @@ def start_parser():
 def main():
     # Gets args and sets them to local variables
     args = start_parser()
-    files = args.input
+    paths = args.input
 
     verbose = args.verbose
+    recurse = args.recurse
+
+    files = []
+    for path in paths:
+        if recurse:
+            if os.path.isdir(path):
+                files += get_files(path)
+            else:
+                print(f"**Recurse set, file: {path} ignored**")
+        else:
+            if os.path.isfile(path):
+                files.append(path)
+            else:
+                print(f"**Recurse not set, dir: {path} ignored**")
+            pass
+
+    epubs = []
+    for file in files:
+        if is_epub(file):
+            epubs.append(file)
+        else:
+            print(f"**{file} is not an epub, skipping**")
 
     print("---------------------")
     # Runs the main code
-    for file in files:
+    for epub in epubs:
 
         # Print starting
-        print(f"Fixing '{os.path.basename(file)}'")
+        print(f"Fixing '{os.path.basename(epub)}'")
 
-        out_file = os.path.splitext(file)[0] + "-fixed.epub"
-        update_zip(file, out_file, scan_zip(file, ".html"), verbose)
+        out_file = os.path.splitext(epub)[0] + "-fixed.epub"
+        update_zip(epub, out_file, scan_zip(epub, ".html"), verbose)
 
         if args.overwrite:
-            os.replace(out_file, file)
+            os.replace(out_file, epub)
 
         # Prints Complete
-        print(f"\033[92mFixing '{os.path.basename(file)}' Complete!\033[0m")
+        print(f"\033[92mFixing '{os.path.basename(epub)}' Complete!\033[0m")
         if args.overwrite:
-            print(f"Located at {file}")
+            print(f"Located at {epub}")
         else:
             print(f"Located at {out_file}")
         print("---------------------")
