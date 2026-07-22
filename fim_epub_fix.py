@@ -97,12 +97,7 @@ def update_xml(xml: str, links: set):
     for link in links:
         name = os.path.basename(link)
         if bytes(name, "cp437") not in xml:
-
-            if os.path.splitext(name)[1] == "jpeg":
-                print(os.path.splitext(name)[1])
-                media = "jpeg"
-            else:
-                media = os.path.splitext(name)[1]
+            media = os.path.splitext(name)[1]
             add = (f'\t\t<item id="{name}" ' +
                    f'href="images/{name}" ' +
                    f'media-type="image/{media}" />\n')
@@ -200,22 +195,53 @@ def dir_path(string: str):
 
 
 def is_epub(path: str) -> bool:
-    if not os.path.isfile():
+    if not os.path.isfile(path):
         return False
-    if os.path.splitext()[1] != ".epub":
+    if os.path.splitext(path)[1] != ".epub":
         return False
     return True
 
 
-def get_files(dir_path: str, files: list[str] = []) -> list[str]:
+def get_files(dir_path: str) -> list[str]:
     abs_path = os.path.abspath(dir_path)
+    files = []
+
     for item in os.listdir(abs_path):
         item_path = os.path.join(abs_path, item)
+
         if os.path.isdir(item_path):
-            files.append(get_files(item_path, files))
+            files += get_files(item_path)
         elif os.path.isfile(item_path):
             files.append(item_path)
+
     return files
+
+
+def validate_files(paths: list[str], recurse: bool) -> list[str]:
+    files = []
+    for path in paths:
+        if recurse:
+            if os.path.isdir(path):
+                files += get_files(path)
+            else:
+                print("\033[91m**Recurse set, file:" +
+                      f" '{os.path.relpath(path)}' ignored**\033[0m")
+        else:
+            if os.path.isfile(path):
+                files.append(path)
+            else:
+                print("\033[91m**Recurse not set, dir:" +
+                      f" '{os.path.relpath(path)}' ignored**\033[0m")
+
+    epubs = []
+    for file in files:
+        if is_epub(file):
+            epubs.append(file)
+        else:
+            print(f"\033[91m**'{os.path.relpath(file)}'" +
+                  " is not an epub, skipping**\033[0m")
+
+    return epubs
 
 
 def start_parser():
@@ -225,56 +251,73 @@ def start_parser():
         Namespace: Returns the args
     """
     parser = argparse.ArgumentParser(description=(
-        "Adds images to epubs using urls"))
+        "Adds images to epubs using embeded urls, meant for fimfiction"))
     parser.add_argument("-i", "--input",
-                        help="input path or file",
+                        help="input paths / files",
                         required=True,
-                        type=(dir_path or file_path),
                         nargs="+")
     parser.add_argument("-lv", "--less_verbose",
-                        help="less info",
+                        help="less info in cli",
                         action="store_false")
     parser.add_argument("-ov", "--overwrite",
-                        help="Ignores output and overwrites",
+                        help="overwrites files",
                         action="store_true")
     parser.add_argument("-r", "--recurse",
-                        help="Goes through all subfolders",
+                        help="checks subfolders",
+                        action="store_true")
+    parser.add_argument("-y", "--skip_confirm",
+                        help="skips confirmations",
                         action="store_true")
     args = parser.parse_args()
     return args
 
 
-# TODO add recursive folder search.
 def main():
     # Gets args and sets them to local variables
     args = start_parser()
     paths = args.input
-
-    verbose = args.verbose
+    less_verbose = args.less_verbose
     recurse = args.recurse
+    overwrite = args.overwrite
+    skip_confirmations = args.skip_confirm
 
-    files = []
-    for path in paths:
-        if recurse:
-            if os.path.isdir(path):
-                files += get_files(path)
+    # Startup message
+    print("=====================")
+    print("Welcome to FimFiction epub Image Fixer!")
+    print("Made by EveCouto")
+    print("=====================")
+
+    epubs = validate_files(paths, recurse)
+    if recurse and not skip_confirmations:
+        while True:
+            ans = input(f"This is about to run through {len(epubs)} file(s)," +
+                        " do you want to proceed? (Y/n) ").lower()
+            if ans == "y":
+                print("Confirmed, continuing.")
+                print("=====================")
+
+                break
+            elif ans == "n":
+                print("Aborting, no files changed.")
+                quit()
             else:
-                print(f"**Recurse set, file: {path} ignored**")
-        else:
-            if os.path.isfile(path):
-                files.append(path)
+                print("Please try again.")
+
+    if overwrite and not skip_confirmations:
+        while True:
+            ans = input(f"This is about to overwrite {len(epubs)} file(s)," +
+                        " do you want to proceed? (Y/n) ").lower()
+            if ans == "y":
+                print("Confirmed, continuing.")
+                print("=====================")
+
+                break
+            elif ans == "n":
+                print("Aborting, no files changed.")
+                quit()
             else:
-                print(f"**Recurse not set, dir: {path} ignored**")
-            pass
+                print("Please try again.")
 
-    epubs = []
-    for file in files:
-        if is_epub(file):
-            epubs.append(file)
-        else:
-            print(f"**{file} is not an epub, skipping**")
-
-    print("---------------------")
     # Runs the main code
     for epub in epubs:
 
@@ -282,18 +325,21 @@ def main():
         print(f"Fixing '{os.path.basename(epub)}'")
 
         out_file = os.path.splitext(epub)[0] + "-fixed.epub"
-        update_zip(epub, out_file, scan_zip(epub, ".html"), verbose)
+        update_zip(epub, out_file, scan_zip(epub, ".html"), less_verbose)
 
-        if args.overwrite:
+        if overwrite:
             os.replace(out_file, epub)
+            out_file = epub
 
         # Prints Complete
         print(f"\033[92mFixing '{os.path.basename(epub)}' Complete!\033[0m")
-        if args.overwrite:
-            print(f"Located at {epub}")
-        else:
-            print(f"Located at {out_file}")
-        print("---------------------")
+        print(f"Located at {out_file}")
+        print("=====================")
+
+    # Completion message
+    print("All files completed.")
+    print("Thanks for using FimFiction epub Image Fixer!")
+    print("=====================")
 
 
 if __name__ == "__main__":
